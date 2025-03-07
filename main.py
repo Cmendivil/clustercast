@@ -23,6 +23,25 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 
+@router.get("/get-players")
+def get_players():
+    try:
+        dynamodb = boto3.resource('dynamodb', region_name='us-east-1')  # Replace with your AWS region
+        table_name = 'players'  # Ensure this table exists in DynamoDB
+        table = dynamodb.Table(table_name)
+
+        # Scan the table and get selected attributes
+        response = table.scan(
+            ProjectionExpression="player_id, first_name, last_name"  # Specify the attributes to return
+        )
+        return response.get("Items", [])
+
+    except ClientError as e:
+        raise HTTPException(status_code=500, detail=f"Error scanning DynamoDB: {e.response['Error']['Message']}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+
 @router.get("/{player_id}")
 def get_similar_players(player_id: str, num_results: int = 5):
     try:
@@ -60,23 +79,6 @@ def get_similar_players(player_id: str, num_results: int = 5):
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 
-@router.get("/get-players")
-def get_players():
-    try:
-        dynamodb = boto3.resource('dynamodb', region_name='us-east-1')  # Replace with your AWS region
-        table_name = 'players'  # Ensure this table exists in DynamoDB
-        table = dynamodb.Table(table_name)
-
-        # Scan the table and get selected attributes
-        response = table.scan(
-            ProjectionExpression="player_id, first_name, last_name"  # Specify the attributes to return
-        )
-        return response.get("Items", [])
-
-    except ClientError as e:
-        raise HTTPException(status_code=500, detail=f"Error scanning DynamoDB: {e.response['Error']['Message']}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 @router.get(
     "/doc",
