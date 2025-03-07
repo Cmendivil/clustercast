@@ -108,7 +108,6 @@ def main():
 
         # Step 4: Apply clustering
         merged_df = apply_clustering(merged_df, scaled_features)
-        print(merged_df)
         # Step 5: Insert data into DynamoDB
         insert_into_dynamodb(merged_df, table_name)
 

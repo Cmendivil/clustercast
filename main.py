@@ -1,3 +1,4 @@
+from random import shuffle
 from fastapi import FastAPI, HTTPException, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -11,7 +12,8 @@ from batch import main
 app = FastAPI(
     title="ClusterCast API",
     description="Find similar hitters",
-    version="1.0.0"
+    version="1.0.0",
+    openapi_prefix="clustercast/"
 )
 
 router = APIRouter()
@@ -159,13 +161,14 @@ def get_similar_players(player_id: str, num_results: int = 5):
             ExpressionAttributeValues={
                 ":c": item["cluster"],
                 ":player_id_value": item["player_id"]
-            },
-            Limit=num_results
+            }
         )
+        items = query_response.get("Items", [])
+        shuffle(items)
 
         response = {
             "player": item,
-            "similar": query_response.get("Items", [])
+            "similar": items[:num_results]
         }
         return response
 
