@@ -1,15 +1,11 @@
 from decimal import Decimal, ROUND_HALF_UP
 import os
-os.environ["XDG_CACHE_HOME"] = "/tmp"
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 import boto3
 from botocore.exceptions import ClientError
 from pybaseball import statcast_batter_exitvelo_barrels
-from pybaseball import cache
-
-cache.enable("/tmp/pybaseball_cache")
 
 # Fetch and merge statcast data for specified years
 def fetch_and_merge_statcast_data(years: list):
