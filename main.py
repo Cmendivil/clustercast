@@ -111,12 +111,17 @@ def doc():
 app.include_router(router, prefix="/similar-players")
 
 def lambda_handler(event, context):
+    print(f"Received event: {json.dumps(event)}")
+
     if 'httpMethod' in event:
-        return Mangum(app)
+        print("Processing API Gateway request")
+        return Mangum(app)(event, context)
 
     if 'Records' in event:
+        print("Processing batch job")
         return main()
 
+    print("Unsupported event type")
     return {
         'statusCode': 400,
         'body': json.dumps('Unsupported event type')
