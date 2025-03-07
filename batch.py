@@ -1,4 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
+import os
+os.environ["XDG_CACHE_HOME"] = "/tmp"
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
