@@ -17,25 +17,14 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ secrets.AWS_REGION }}
-    - name: Install dependencies
-      run: |
-        python3 -m venv venv
-        source venv/bin/activate
-        pip install \
-        --platform manylinux2014_x86_64 \
-        --target=./venv/lib/python3.13/site-packages \
-        --implementation cp \
-        --python-version 3.13 \
-        --only-binary=:all: -r requirements.txt
+    - name: Build Docker image
+      run: docker build -t my-app-image .
+    - name: Tag Docker image
+      run: docker tag similar-players-image:latest ${{ secrets.ECR }}
+    - name: Push Docker image to ECR
+      run: docker push ${{ secrets.ECR }}
     - name: Deploy to Lambda
       run: |
-        # Package the Lambda function and deploy it using AWS CLI
-        # Package the Lambda function and deploy it using AWS CLI
-        mkdir deployment-package
-        cp -r *.py deployment-package/
-        cp -r venv/lib/python*/site-packages/* deployment-package/
-        cd deployment-package
-        zip -r function.zip .  # Create a ZIP of your Lambda function's code
         aws lambda update-function-code \
           --function-name ${{ secrets.LAMBDA_NAME }} \
-          --zip-file fileb://function.zip
+          --image-uri ${{ secrets.ECR }}
