@@ -20,7 +20,7 @@ jobs:
     - name: Build Docker image
       run: docker build -t similar-players-image .
     - name: Tag Docker image
-      run: docker tag similar-players-image:latest ${{ secrets.ECR }}
+      run: docker tag similar-players-image:latest ${{ secrets.ECR }}:latest
     - name: Push Docker image to ECR
       run: docker push ${{ secrets.ECR }}:latest
     - name: Deploy to Lambda
