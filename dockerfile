@@ -1,4 +1,4 @@
-FROM public.ecr.aws/lambda/python:3.8
+FROM public.ecr.aws/lambda/python:3.13
 
 # Install any dependencies here
 COPY requirements.txt .
