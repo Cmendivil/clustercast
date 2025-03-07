@@ -17,6 +17,9 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ secrets.AWS_REGION }}
+    - name: Log in to AWS ECR
+      run: |
+        aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 793672097524.dkr.ecr.us-east-1.amazonaws.com
     - name: Build Docker image
       run: docker build -t similar-players-image .
     - name: Tag Docker image
