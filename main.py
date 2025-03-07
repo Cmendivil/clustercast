@@ -1,69 +1,123 @@
-from fastapi import FastAPI, HTTPException
-from pybaseball import statcast_batter, playerid_lookup
-import pandas as pd
-from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans
+from fastapi import FastAPI, HTTPException, APIRouter
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+import boto3
+import json
+import os
+from mangum import Mangum
+from botocore.exceptions import ClientError
+from batch import main
 
-app = FastAPI()
+app = FastAPI(title="Similar Players API",
+    description="Find similar hitters",
+    version="1.0.0"
+)
+router = APIRouter()
+load_dotenv()
+origins = os.getenv("ORIGINS").split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # Allow specified origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods (GET, POST, etc.)
+    allow_headers=["*"],  # Allow all headers
+)
+
+@router.get("/{player_id}")
+def get_similar_players(player_id: str, num_results: int = 5):
+    try:
+        dynamodb = boto3.resource('dynamodb', region_name='us-east-1')  # Replace with your AWS region
+        table_name = 'players'  # Ensure this table exists in DynamoDB
+        table = dynamodb.Table(table_name)
+
+        # Get the item for the specified player_id
+        response = table.get_item(Key={"player_id": player_id})
+
+        if 'Item' not in response:
+            raise HTTPException(status_code=404, detail="Player not found")
+
+        item = response["Item"]
+
+        # Query for similar players
+        query_response = table.query(
+            IndexName="cluster-index",
+            KeyConditionExpression="#cluster = :c",
+            FilterExpression="player_id <> :player_id_value",
+            ExpressionAttributeNames={
+                "#cluster": "cluster"  # Replace 'cluster' with a placeholder name
+            },
+            ExpressionAttributeValues={
+                ":c": item["cluster"],
+                ":player_id_value": item["player_id"]
+            },
+            Limit=num_results
+        )
+        return query_response.get("Items", [])
+
+    except ClientError as e:
+        raise HTTPException(status_code=500, detail=f"Error querying DynamoDB: {e.response['Error']['Message']}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 
-# Fetch player data from Statcast in real-time
-def get_player_data(player_id: int, start_date: str, end_date: str):
-    data = statcast_batter(start_date, end_date, player_id)
-    return data
+@router.get("/get-players")
+def get_players():
+    try:
+        dynamodb = boto3.resource('dynamodb', region_name='us-east-1')  # Replace with your AWS region
+        table_name = 'players'  # Ensure this table exists in DynamoDB
+        table = dynamodb.Table(table_name)
+
+        # Scan the table and get selected attributes
+        response = table.scan(
+            ProjectionExpression="player_id, first_name, last_name"  # Specify the attributes to return
+        )
+        return response.get("Items", [])
+
+    except ClientError as e:
+        raise HTTPException(status_code=500, detail=f"Error scanning DynamoDB: {e.response['Error']['Message']}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+@router.get(
+    "/doc",
+    summary="API Documentation",
+    description="Returns the OpenAPI documentation in JSON format.",
+    responses={
+        200: {
+            "description": "Returns OpenAPI JSON documentation",
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Internal server error: Some unexpected issue"}
+                }
+            },
+        },
+    },
+)
+def doc():
+    try:
+        if not app.openapi():
+            raise HTTPException(status_code=404, detail="Documentation not found")
+        return app.openapi()
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
+app.include_router(router, prefix="/similar-players")
 
-# Preprocess data
-def preprocess_data(data):
-    print(type(data))  # Inspect the columns
-    features = ["launch_speed", "launch_angle", "barrel_pct", "hard_hit_pct"]
-    # Filter features that exist in the DataFrame
-    valid_features = [col for col in features if col in data.columns]
-    print(f"Using features: {valid_features}")  # Print valid features
-    data = data.dropna(subset=valid_features)
-    scaler = StandardScaler()
+def lambda_handler(event, context):
+    if 'httpMethod' in event:
+        return Mangum(app)
 
-    data.loc[:,valid_features] = scaler.fit_transform(data[valid_features])
-    return data, valid_features
+    if 'Records' in event:
+        return main()
 
+    return {
+        'statusCode': 400,
+        'body': json.dumps('Unsupported event type')
+    }
 
-# Train K-Means model
-def train_kmeans(data, features, num_clusters=10):
-    kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init=10)
-    data["cluster"] = kmeans.fit_predict(data[features])
-    return kmeans, data
-
-
-@app.get("/similar_players/{player_name}")
-def get_similar_players(player_name: str, num_results: int = 5):
-    player_info = playerid_lookup(player_name.split()[1], player_name.split()[0])
-    if player_info.empty:
-        raise HTTPException(status_code=404, detail="Player not found")
-
-    player_id = player_info.iloc[0]["key_mlbam"]
-    player_data = get_player_data(player_id, "2020-03-01", "2024-03-03")  # Fetch recent data
-    player_data, feature_cols = preprocess_data(player_data)
-    kmeans_model, player_data = train_kmeans(player_data, feature_cols)
-
-    # Ensure the player exists in the DataFrame
-    if player_id not in player_data["batter"].values:
-        raise HTTPException(status_code=404, detail="Player data not found in Statcast")
-
-    player_cluster = player_data.loc[player_data["batter"] == player_id, "cluster"].values[0]
-    print(f"Player {player_name} is in cluster {player_cluster}")
-    print(f"Player Data - {player_data}")
-    print(f"Player Data Cluster - {player_data["cluster"]}")
-    print(f"Player Cluster - {player_cluster}")
-
-    # Get similar players
-    similar_players = player_data[player_data["cluster"] == player_cluster]
-    print(f"similar_players - {similar_players}")
-    print(f"similar_players[batter] - {similar_players["batter"]}")
-    similar_players = similar_players[similar_players["batter"] != player_id]
-
-    # Check how many similar players were found
-    print(f"Found {len(similar_players)} similar players")
-
-    return {"player_name": player_name, "similar_players": similar_players["player_name"].head(num_results).tolist()}
 

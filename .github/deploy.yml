@@ -1,0 +1,41 @@
+name: Deploy to AWS Lambda
+on:
+  push:
+    branches:
+      - main  # Trigger deploy when pushing to the 'main' branch (you can change this to your preferred branch)
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Set up AWS CLI
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+    - name: Install dependencies
+      run: |
+        python3 -m venv venv
+        source venv/bin/activate
+        pip install \
+        --platform manylinux2014_x86_64 \
+        --target=./venv/lib/python3.13/site-packages \
+        --implementation cp \
+        --python-version 3.13 \
+        --only-binary=:all: -r requirements.txt
+    - name: Deploy to Lambda
+      run: |
+        # Package the Lambda function and deploy it using AWS CLI
+        # Package the Lambda function and deploy it using AWS CLI
+        mkdir deployment-package
+        cp -r *.py deployment-package/
+        cp -r venv/lib/python*/site-packages/* deployment-package/
+        cd deployment-package
+        zip -r function.zip .  # Create a ZIP of your Lambda function's code
+        aws lambda update-function-code \
+          --function-name ${{ secrets.LAMBDA_NAME }} \
+          --zip-file fileb://function.zip
