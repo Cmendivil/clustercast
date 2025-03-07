@@ -5,6 +5,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 import boto3
 from botocore.exceptions import ClientError
+from pybaseball import cache
+cache.enable("/tmp/pybaseball_cache")
 from pybaseball import statcast_batter_exitvelo_barrels
 
 # Fetch and merge statcast data for specified years

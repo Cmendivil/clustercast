@@ -42,7 +42,7 @@ def get_players():
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 
-@router.get("/{player_id}")
+@router.get("/get-players/{player_id}")
 def get_similar_players(player_id: str, num_results: int = 5):
     try:
         dynamodb = boto3.resource('dynamodb', region_name='us-east-1')  # Replace with your AWS region
