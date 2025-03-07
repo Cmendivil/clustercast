@@ -13,10 +13,10 @@ def fetch_and_merge_statcast_data(years: list):
         years_4digit = [2000 + year if year < 100 else year for year in years]
 
         # Initialize the merged dataframe with the first year's data
-        merged_df = statcast_batter_exitvelo_barrels(years_4digit[0])
+        merged_df = statcast_batter_exitvelo_barrels(years_4digit[0], 150)
 
         # Merge data for the remaining years
-        for year, df in zip(years[1:], [statcast_batter_exitvelo_barrels(y) for y in years_4digit[1:]]):
+        for year, df in zip(years[1:], [statcast_batter_exitvelo_barrels(y, 150) for y in years_4digit[1:]]):
             merged_df = pd.merge(merged_df, df, on=['last_name, first_name', 'player_id'],
                                  suffixes=(f'_{year - 1}', f'_{year}'))
 
@@ -72,8 +72,8 @@ def insert_into_dynamodb(merged_df: pd.DataFrame, table_name: str):
             table.put_item(
                 Item={
                     'player_id': str(row['player_id']),
-                    'last_name': str(row['last_name, first_name']).split(",")[0],
-                    'first_name': str(row['last_name, first_name']).split(",")[1],
+                    'last_name': str(row['last_name, first_name']).split(",")[0].strip(),
+                    'first_name': str(row['last_name, first_name']).split(",")[1].strip(),
                     'exit_velocity': Decimal(row['avg_hit_speed_combined']).quantize(ROUNDING_PRECISION,
                                                                                      rounding=ROUND_HALF_UP),
                     'launch_angle': Decimal(row['avg_hit_angle_combined']).quantize(ROUNDING_PRECISION,
@@ -108,10 +108,13 @@ def main():
 
         # Step 4: Apply clustering
         merged_df = apply_clustering(merged_df, scaled_features)
-
+        print(merged_df)
         # Step 5: Insert data into DynamoDB
         insert_into_dynamodb(merged_df, table_name)
 
     except Exception as e:
         print(f"Error in processing: {str(e)}")
 
+
+if __name__ == "__main__":
+    main()

@@ -8,10 +8,12 @@ from mangum import Mangum
 from botocore.exceptions import ClientError
 from batch import main
 
-app = FastAPI(title="Similar Players API",
+app = FastAPI(
+    title="ClusterCast API",
     description="Find similar hitters",
     version="1.0.0"
 )
+
 router = APIRouter()
 load_dotenv()
 origins = os.getenv("ORIGINS").split(",")
@@ -23,7 +25,38 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 
-@router.get("/get-players")
+@router.get(
+    "/get-players",
+    responses={
+        200: {
+            "description": "List of players",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "player_id": "1",
+                            "first_name": "John",
+                            "last_name": "Doe"
+                        },
+                        {
+                            "player_id": "2",
+                            "first_name": "Jane",
+                            "last_name": "Smith"
+                        }
+                    ]
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Error scanning DynamoDB: Unable to retrieve items."}
+                }
+            }
+        }
+    }
+)
 def get_players():
     try:
         dynamodb = boto3.resource('dynamodb', region_name='us-east-1')  # Replace with your AWS region
@@ -42,7 +75,65 @@ def get_players():
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 
-@router.get("/get-players/{player_id}")
+@router.get(
+    "/get-players/{player_id}",
+    responses={
+        200: {
+            "description": "Player and similar players data",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "player": {
+                            "player_id": "1",
+                            "first_name": "John",
+                            "last_name": "Doe",
+                            "brl_percent": 10.5,
+                            "cluster": 3,
+                            "exit_velocity": 89.4,
+                            "launch_angle": 15.2
+                        },
+                        "similar": [
+                            {
+                                "player_id": "2",
+                                "first_name": "Jane",
+                                "last_name": "Smith",
+                                "brl_percent": 9.8,
+                                "cluster": 3,
+                                "exit_velocity": 88.7,
+                                "launch_angle": 16.0
+                            },
+                            {
+                                "player_id": "3",
+                                "first_name": "Mike",
+                                "last_name": "Johnson",
+                                "brl_percent": 10.0,
+                                "cluster": 3,
+                                "exit_velocity": 90.1,
+                                "launch_angle": 14.5
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "Player not found",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Player not found"}
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Error querying DynamoDB: Unable to retrieve player data."}
+                }
+            }
+        }
+    }
+)
 def get_similar_players(player_id: str, num_results: int = 5):
     try:
         dynamodb = boto3.resource('dynamodb', region_name='us-east-1')  # Replace with your AWS region
@@ -71,13 +162,17 @@ def get_similar_players(player_id: str, num_results: int = 5):
             },
             Limit=num_results
         )
-        return query_response.get("Items", [])
+
+        response = {
+            "player": item,
+            "similar": query_response.get("Items", [])
+        }
+        return response
 
     except ClientError as e:
         raise HTTPException(status_code=500, detail=f"Error querying DynamoDB: {e.response['Error']['Message']}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
-
 
 
 @router.get(
@@ -87,16 +182,42 @@ def get_similar_players(player_id: str, num_results: int = 5):
     responses={
         200: {
             "description": "Returns OpenAPI JSON documentation",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "openapi": "3.0.0",
+                        "info": {
+                            "title": "ClusterCast API",
+                            "description": "Find similar hitters",
+                            "version": "1.0.0"
+                        },
+                        "paths": {
+                            "/clustercast/get-players": {
+                                "get": {
+                                    "summary": "Get list of players",
+                                    "description": "Returns a list of all players with `player_id`, `first_name`, and `last_name`."
+                                }
+                            },
+                            "/clustercast/get-players/{player_id}": {
+                                "get": {
+                                    "summary": "Get player details and similar players",
+                                    "description": "Fetches details of a specific player and returns similar players based on `cluster`."
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         },
         500: {
             "description": "Internal server error",
             "content": {
                 "application/json": {
-                    "example": {"detail": "Internal server error: Some unexpected issue"}
+                    "example": {"detail": "Internal server error: Unable to generate OpenAPI documentation"}
                 }
-            },
-        },
-    },
+            }
+        }
+    }
 )
 def doc():
     try:
@@ -108,7 +229,7 @@ def doc():
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
-app.include_router(router, prefix="/similar-players")
+app.include_router(router, prefix="/clustercast")
 
 def lambda_handler(event, context):
     print(f"Received event: {json.dumps(event)}")
@@ -126,5 +247,3 @@ def lambda_handler(event, context):
         'statusCode': 400,
         'body': json.dumps('Unsupported event type')
     }
-
-
