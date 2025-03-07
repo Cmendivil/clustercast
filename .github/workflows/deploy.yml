@@ -22,7 +22,7 @@ jobs:
     - name: Tag Docker image
       run: docker tag similar-players-image:latest ${{ secrets.ECR }}
     - name: Push Docker image to ECR
-      run: docker push ${{ secrets.ECR }}
+      run: docker push ${{ secrets.ECR }}:latest
     - name: Deploy to Lambda
       run: |
         aws lambda update-function-code \
